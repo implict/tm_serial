@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine with Microbit</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.serialport.js"></script>
+    <style>
+        #uploaded-image {
+            max-width: 300px;
+            max-height: 300px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teachable Machine with Microbit</h1>
+    <input type="text" id="model-url" placeholder="Enter Teachable Machine model URL">
+    <button onclick="loadModel()">Load Model</button>
+    <br><br>
+    <input type="file" id="image-upload" accept="image/*">
+    <button onclick="classifyUploadedImage()">Classify Uploaded Image</button>
+    <br><br>
+    <img id="uploaded-image" alt="Uploaded Image">
+    <br><br>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script>
+        let model, webcam, labelContainer, maxPredictions;
+        let serial;
+
+        async function loadModel() {
+            const modelURL = document.getElementById("model-url").value;
+            const modelURLSplit = modelURL.split("/");
+            const modelID = modelURLSplit[modelURLSplit.length - 1];
+            const modelJSON = `${modelURL}model.json`;
+            const metadataJSON = `${modelURL}metadata.json`;
+
+            model = await tmImage.load(modelJSON, metadataJSON);
+            maxPredictions = model.getTotalClasses();
+
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+
+            setupWebcam();
+            initSerial();
+        }
+
+        async function setupWebcam() {
+            const flip = true;
+            webcam = new tmImage.Webcam(200, 200, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            // Send the highest probability class to Microbit
+            const highestProbClass = prediction.reduce((prev, current) => 
+                (prev.probability > current.probability) ? prev : current
+            );
+            sendToMicrobit(highestProbClass.className);
+        }
+
+        async function classifyUploadedImage() {
+            const imageUpload = document.getElementById('image-upload');
+            const img = document.getElementById('uploaded-image');
+            
+            if (imageUpload.files && imageUpload.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    
+                    // Wait for the image to load before predicting
+                    img.onload = async function() {
+                        const prediction = await model.predict(img);
+                        for (let i = 0; i < maxPredictions; i++) {
+                            const classPrediction =
+                                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                            labelContainer.childNodes[i].innerHTML = classPrediction;
+                        }
+
+                        // Send the highest probability class to Microbit
+                        const highestProbClass = prediction.reduce((prev, current) => 
+                            (prev.probability > current.probability) ? prev : current
+                        );
+                        sendToMicrobit(highestProbClass.className);
+                    }
+                }
+                
+                reader.readAsDataURL(imageUpload.files[0]);
+            }
+        }
+
+        function initSerial() {
+            serial = new p5.SerialPort();
+            serial.open('COM3'); // 마이크로비트의 COM 포트를 지정하세요
+        }
+
+        function sendToMicrobit(className) {
+            if (serial.isOpen()) {
+                serial.write(className + '\n');
+            }
+        }
+    </script>
+</body>
+</html>
