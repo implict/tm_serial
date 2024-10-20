@@ -15,6 +15,13 @@
         #modelInput, #loadModel {
             display: none;
         }
+        #debugOutput {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            height: 200px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -34,6 +41,10 @@
     <br><br>
     <div id="webcam-container"></div>
     <div id="label-container"></div>
+    <div id="debugOutput">
+        <h3>Debug Output:</h3>
+        <div id="debugText"></div>
+    </div>
 
     <script>
         let model, webcam, labelContainer, maxPredictions;
@@ -41,10 +52,16 @@
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
 
+        function addDebugMessage(message) {
+            const debugText = document.getElementById('debugText');
+            debugText.innerHTML += message + '<br>';
+            debugText.scrollTop = debugText.scrollHeight;
+        }
+
         async function connectMicrobit() {
             try {
                 port = await navigator.serial.requestPort();
-                await port.open({ baudRate: 9600 });
+                await port.open({ baudRate: 9600 });  // Changed to 9600 to match Microbit
                 writer = port.writable.getWriter();
                 reader = port.readable.getReader();
                 
@@ -53,10 +70,12 @@
                 document.getElementById('modelInput').style.display = 'block';
                 document.getElementById('loadModel').style.display = 'inline-block';
                 
+                addDebugMessage('Connected to Microbit');
                 readLoop();
             } catch (err) {
                 console.error('Connection error:', err);
                 document.getElementById('connectionStatus').innerText = 'Failed to connect: ' + err.message;
+                addDebugMessage('Connection error: ' + err.message);
             }
         }
 
@@ -67,7 +86,9 @@
                     reader.releaseLock();
                     break;
                 }
-                console.log('Received from Microbit:', decoder.decode(value));
+                const received = decoder.decode(value);
+                console.log('Received from Microbit:', received);
+                addDebugMessage('Received from Microbit: ' + received);
             }
         }
 
@@ -78,17 +99,23 @@
             const modelJSON = `${modelURL}model.json`;
             const metadataJSON = `${modelURL}metadata.json`;
 
-            model = await tmImage.load(modelJSON, metadataJSON);
-            maxPredictions = model.getTotalClasses();
+            try {
+                model = await tmImage.load(modelJSON, metadataJSON);
+                maxPredictions = model.getTotalClasses();
 
-            labelContainer = document.getElementById("label-container");
-            for (let i = 0; i < maxPredictions; i++) {
-                labelContainer.appendChild(document.createElement("div"));
+                labelContainer = document.getElementById("label-container");
+                for (let i = 0; i < maxPredictions; i++) {
+                    labelContainer.appendChild(document.createElement("div"));
+                }
+
+                document.getElementById('image-upload').style.display = 'inline-block';
+                document.getElementById('classifyBtn').style.display = 'inline-block';
+                setupWebcam();
+                addDebugMessage('Model loaded successfully');
+            } catch (err) {
+                console.error('Model loading error:', err);
+                addDebugMessage('Model loading error: ' + err.message);
             }
-
-            document.getElementById('image-upload').style.display = 'inline-block';
-            document.getElementById('classifyBtn').style.display = 'inline-block';
-            setupWebcam();
         }
 
         async function setupWebcam() {
@@ -99,6 +126,7 @@
             window.requestAnimationFrame(loop);
 
             document.getElementById("webcam-container").appendChild(webcam.canvas);
+            addDebugMessage('Webcam setup complete');
         }
 
         async function loop() {
@@ -154,10 +182,13 @@
         async function sendToMicrobit(className) {
             if (writer) {
                 try {
-                    await writer.write(encoder.encode(className + '\n'));
-                    console.log('Sent to Microbit:', className);
+                    const data = className + '\n';
+                    await writer.write(encoder.encode(data));
+                    console.log('Sent to Microbit:', data);
+                    addDebugMessage('Sent to Microbit: ' + data);
                 } catch (error) {
                     console.error('Send error:', error);
+                    addDebugMessage('Send error: ' + error.message);
                 }
             }
         }
