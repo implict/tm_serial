@@ -1,10 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- 헤더 부분은 변경 없음 -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine with Microbit</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        #uploaded-image {
+            max-width: 300px;
+            max-height: 300px;
+            display: none;
+        }
+        #modelInput, #loadModel {
+            display: none;
+        }
+        #debugOutput {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            height: 200px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body>
-    <!-- 바디의 HTML 부분은 변경 없음 -->
+    <h1>Teachable Machine with Microbit</h1>
+    <button id="connectBtn" onclick="connectMicrobit()">Connect to Microbit</button>
+    <div id="connectionStatus"></div>
+    <br><br>
+    <div id="modelInput">
+        <input type="text" id="model-url" placeholder="Enter Teachable Machine model URL">
+        <button id="loadModel" onclick="loadModel()">Load Model</button>
+    </div>
+    <br><br>
+    <input type="file" id="image-upload" accept="image/*" style="display:none;">
+    <button id="classifyBtn" onclick="classifyUploadedImage()" style="display:none;">Classify Uploaded Image</button>
+    <br><br>
+    <img id="uploaded-image" alt="Uploaded Image">
+    <br><br>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+    <div id="debugOutput">
+        <h3>Debug Output:</h3>
+        <div id="debugText"></div>
+    </div>
 
     <script>
         let model, webcam, labelContainer, maxPredictions;
@@ -12,7 +52,88 @@
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
 
-        // addDebugMessage, connectMicrobit, readLoop, loadModel, setupWebcam, loop 함수는 변경 없음
+        function addDebugMessage(message) {
+            const debugText = document.getElementById('debugText');
+            debugText.innerHTML += message + '<br>';
+            debugText.scrollTop = debugText.scrollHeight;
+        }
+
+        async function connectMicrobit() {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });  // Changed to 115200
+                writer = port.writable.getWriter();
+                reader = port.readable.getReader();
+                
+                document.getElementById('connectionStatus').innerText = 'Connected to Microbit!';
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('modelInput').style.display = 'block';
+                document.getElementById('loadModel').style.display = 'inline-block';
+                
+                addDebugMessage('Connected to Microbit');
+                readLoop();
+            } catch (err) {
+                console.error('Connection error:', err);
+                document.getElementById('connectionStatus').innerText = 'Failed to connect: ' + err.message;
+                addDebugMessage('Connection error: ' + err.message);
+            }
+        }
+
+        async function readLoop() {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) {
+                    reader.releaseLock();
+                    break;
+                }
+                const received = decoder.decode(value);
+                console.log('Received from Microbit:', received);
+                addDebugMessage('Received from Microbit: ' + received);
+            }
+        }
+
+        async function loadModel() {
+            const modelURL = document.getElementById("model-url").value;
+            const modelURLSplit = modelURL.split("/");
+            const modelID = modelURLSplit[modelURLSplit.length - 1];
+            const modelJSON = `${modelURL}model.json`;
+            const metadataJSON = `${modelURL}metadata.json`;
+
+            try {
+                model = await tmImage.load(modelJSON, metadataJSON);
+                maxPredictions = model.getTotalClasses();
+
+                labelContainer = document.getElementById("label-container");
+                for (let i = 0; i < maxPredictions; i++) {
+                    labelContainer.appendChild(document.createElement("div"));
+                }
+
+                document.getElementById('image-upload').style.display = 'inline-block';
+                document.getElementById('classifyBtn').style.display = 'inline-block';
+                setupWebcam();
+                addDebugMessage('Model loaded successfully');
+            } catch (err) {
+                console.error('Model loading error:', err);
+                addDebugMessage('Model loading error: ' + err.message);
+            }
+        }
+
+        async function setupWebcam() {
+            const flip = true;
+            webcam = new tmImage.Webcam(200, 200, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            addDebugMessage('Webcam setup complete');
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
 
         async function predict() {
             const prediction = await model.predict(webcam.canvas);
@@ -65,10 +186,24 @@
                     await writer.write(encoder.encode(data));
                     console.log('Sent to Microbit:', data);
                     addDebugMessage('Sent to Microbit: ' + data);
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay added
                 } catch (error) {
                     console.error('Send error:', error);
                     addDebugMessage('Send error: ' + error.message);
+                    await reconnectMicrobit();
                 }
+            }
+        }
+
+        async function reconnectMicrobit() {
+            try {
+                if (port) {
+                    await port.close();
+                }
+                await connectMicrobit();
+            } catch (error) {
+                console.error('Reconnection failed:', error);
+                addDebugMessage('Reconnection failed: ' + error.message);
             }
         }
     </script>
