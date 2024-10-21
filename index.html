@@ -71,7 +71,7 @@
         async function connectMicrobit() {
             try {
                 port = await navigator.serial.requestPort();
-                await port.open({ baudRate: 9600 });
+                await port.open({ baudRate: 115200 });  // Changed to 115200
                 writer = port.writable.getWriter();
                 reader = port.readable.getReader();
                 
@@ -222,14 +222,31 @@
         async function sendToMicrobit(className) {
             if (writer) {
                 try {
-                    const data = className + '\n';
+                    const data = `C${className}\n`;  // Added 'C' prefix
+                    addDebugMessage('Attempting to send: ' + data);
                     await writer.write(encoder.encode(data));
                     console.log('Sent to Microbit:', data);
-                    addDebugMessage('Sent to Microbit: ' + data);
+                    addDebugMessage('Successfully sent to Microbit: ' + data);
                 } catch (error) {
                     console.error('Send error:', error);
                     addDebugMessage('Send error: ' + error.message);
+                    await reconnectMicrobit();
                 }
+            } else {
+                addDebugMessage('Writer not available. Reconnecting...');
+                await reconnectMicrobit();
+            }
+        }
+
+        async function reconnectMicrobit() {
+            try {
+                if (port) {
+                    await port.close();
+                }
+                await connectMicrobit();
+            } catch (error) {
+                console.error('Reconnection failed:', error);
+                addDebugMessage('Reconnection failed: ' + error.message);
             }
         }
     </script>
