@@ -51,6 +51,7 @@
         let port, writer, reader;
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
+        let lastPredictedClass = null;
 
         function addDebugMessage(message) {
             const debugText = document.getElementById('debugText');
@@ -61,7 +62,7 @@
         async function connectMicrobit() {
             try {
                 port = await navigator.serial.requestPort();
-                await port.open({ baudRate: 9600 });  // Changed to 9600 to match Microbit
+                await port.open({ baudRate: 9600 });
                 writer = port.writable.getWriter();
                 reader = port.readable.getReader();
                 
@@ -146,7 +147,11 @@
             const highestProbClass = prediction.reduce((prev, current) => 
                 (prev.probability > current.probability) ? prev : current
             );
-            sendToMicrobit(highestProbClass.className);
+            
+            if (highestProbClass.className !== lastPredictedClass) {
+                sendToMicrobit(highestProbClass.className);
+                lastPredictedClass = highestProbClass.className;
+            }
         }
 
         async function classifyUploadedImage() {
@@ -171,7 +176,11 @@
                         const highestProbClass = prediction.reduce((prev, current) => 
                             (prev.probability > current.probability) ? prev : current
                         );
-                        sendToMicrobit(highestProbClass.className);
+                        
+                        if (highestProbClass.className !== lastPredictedClass) {
+                            sendToMicrobit(highestProbClass.className);
+                            lastPredictedClass = highestProbClass.className;
+                        }
                     }
                 }
                 
