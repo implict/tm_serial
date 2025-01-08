@@ -234,7 +234,9 @@
                 //     await reconnectMicrobit();
                 // }
                 try {
-                    const data = className;
+                    //const data = className;
+                    // 모든 제어 문자 제거 (0-31, 127)
+                    const data = className.replace(/[\x00-\x1F\x7F]/g, '');
                     // 문자열의 각 문자 코드 확인
                     let codes = [];
                     for(let i = 0; i < data.length; i++) {
