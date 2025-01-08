@@ -221,10 +221,27 @@
 
         async function sendToMicrobit(className) {        
             if (writer) {
+                // try {
+                //     //const data = `${className}`;  // remove 'C' prefix
+                //     const data = className.trim();  // trim 추가
+                //     addDebugMessage('Attempting to send: ' + data);                   
+                //     await writer.write(encoder.encode(data));
+                //     console.log('Sent to Microbit:', data);
+                //     addDebugMessage('Successfully sent to Microbit: ' + data);
+                // } catch (error) {
+                //     console.error('Send error:', error);
+                //     addDebugMessage('Send error: ' + error.message);
+                //     await reconnectMicrobit();
+                // }
                 try {
-                    //const data = `${className}`;  // remove 'C' prefix
-                    const data = className.trim();  // trim 추가
-                    addDebugMessage('Attempting to send: ' + data);                   
+                    const data = className;
+                    // 문자열의 각 문자 코드 확인
+                    let codes = [];
+                    for(let i = 0; i < data.length; i++) {
+                        codes.push(data.charCodeAt(i));
+                    }
+                    addDebugMessage('Character codes: ' + codes.join(', '));
+                    
                     await writer.write(encoder.encode(data));
                     console.log('Sent to Microbit:', data);
                     addDebugMessage('Successfully sent to Microbit: ' + data);
