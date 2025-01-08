@@ -222,7 +222,8 @@
         async function sendToMicrobit(className) {        
             if (writer) {
                 try {
-                    const data = `${className}`;  // remove 'C' prefix
+                    //const data = `${className}`;  // remove 'C' prefix
+                    const data = className.trim();  // trim 추가
                     addDebugMessage('Attempting to send: ' + data);                   
                     await writer.write(encoder.encode(data));
                     console.log('Sent to Microbit:', data);
