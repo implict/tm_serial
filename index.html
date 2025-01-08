@@ -219,10 +219,10 @@
             }
         }
 
-        async function sendToMicrobit(className) {
+        async function sendToMicrobit(className) {        비동기 함수 sendToMicrobit(className) {
             if (writer) {
                 try {
-                    const data = `${className}\n`;  // remove 'C' prefix
+                    const data = `${className}`;  // remove 'C' prefix
                     addDebugMessage('Attempting to send: ' + data);
                     await writer.write(encoder.encode(data));
                     console.log('Sent to Microbit:', data);
